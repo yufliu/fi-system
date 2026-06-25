@@ -54,6 +54,22 @@
   tr.total td{font-weight:700;border-top:2px solid var(--line)}
   .rowdel{cursor:pointer;color:var(--muted);border:0;background:transparent;font-size:16px}
   .rowdel:hover{color:var(--bad)}
+  /* column visibility by strategy (robust against table rebuilds) */
+  .strView .ltrCol{display:none}
+  .ltrView .strCol{display:none}
+  /* highlighted Net/mo cell */
+  td.netcell{font-weight:800;text-align:right}
+  td.netcell span{display:inline-block;padding:5px 10px;border-radius:8px;
+    background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.55);color:#86efac}
+  td.netcell span.neg{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.55);color:#fca5a5}
+  tr.total td.netcell span{background:rgba(34,197,94,.22);font-size:14px}
+  /* green now-income highlight box */
+  .nowgreen{margin-top:14px;display:flex;flex-wrap:wrap;gap:22px;align-items:baseline;
+    background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.45);border-radius:10px;padding:12px 16px}
+  .nowgreen .lbl{color:#86efac;font-size:12px;text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .nowgreen .mo{font-size:22px;font-weight:800;color:#86efac}
+  .nowgreen .yr{font-size:22px;font-weight:800;color:#86efac}
+  .nowgreen .sub{color:var(--muted);font-size:12px}
   /* form grid */
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
   .field label{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
@@ -124,7 +140,7 @@
       <tbody id="portfolioBody"></tbody>
       <tfoot><tr class="total">
         <td>Total</td><td id="ptUnits">0</td><td class="strCol" id="ptIncome">$0</td><td class="ltrCol"></td>
-        <td></td><td class="strCol"></td><td></td><td id="ptDebt">$0</td><td id="ptNet">$0</td><td></td>
+        <td></td><td class="strCol"></td><td></td><td id="ptDebt">$0</td><td class="netcell" id="ptNet">$0</td><td></td>
       </tr></tfoot>
     </table>
     </div>
@@ -144,6 +160,11 @@
       <div class="card"><div class="k">End-state (paid-off) net</div><div class="v sm" id="cPaidOff">$0</div></div>
       <div class="card warn"><div class="k">Gap to target</div><div class="v sm" id="cGap">$0</div></div>
     </div>
+    <div class="nowgreen">
+      <div><div class="lbl">Current passive income</div><div class="sub">rental net + counted other income, today</div></div>
+      <div><span class="mo" id="ngMo">$0</span><span class="sub"> /mo</span></div>
+      <div><span class="yr" id="ngYr">$0</span><span class="sub"> /yr</span></div>
+    </div>
   </section>
 
   <!-- 2. WHERE I'M GOING -->
@@ -151,13 +172,11 @@
     <h2><span class="step">2</span> Where I'm going — the goal</h2>
     <p class="hint">Your FIRE target is annual passive income. Optionally anchor it to what you actually spend.</p>
     <div class="grid">
-      <div class="field"><label>FIRE target — primary <b>not</b> paid off ($/yr)</label><input id="target400" type="number"></div>
-      <div class="field"><label>FIRE target — primary paid off ($/yr)</label><input id="target300" type="number"></div>
+      <div class="field"><label>FIRE target — passive income ($/yr)</label><input id="target400" type="number"></div>
       <div class="field"><label>Annual spending need ($/yr, optional anchor)</label><input id="spendNeed" type="number" placeholder="e.g. 150000"></div>
       <div class="field"><label>Annual rent growth (%, applies to all rents)</label><input id="rentGrowth" type="number" step="0.5"></div>
       <div class="field"><label>LTR misc-cost factor (× current misc, LTR view)</label><input id="ltrMiscFactor" type="number" step="0.05"></div>
     </div>
-    <div class="toggle"><input type="checkbox" id="primaryPaidOff"><label for="primaryPaidOff" style="margin:0;color:var(--txt)">Assume primary residence paid off (use the lower target)</label></div>
   </section>
 
   <!-- 3. FUTURE HOME TEMPLATE -->
@@ -306,7 +325,7 @@ const KEY = "fire-system-state-v1";
 function defaults(){
   return {
     strategy:"STR_MTR",
-    target400:400000, target300:300000, primaryPaidOff:false,
+    target400:400000,
     spendNeed:null, rentGrowth:0,
     current:[
       {name:"Cactus St (duplex)", units:2, income:6000, ltrRent:3429, mortgage:1500, utilities:600, misc:400, loanBalance:225000, estimate:true},
@@ -382,7 +401,7 @@ function curNet(p, strategy){
   return {income,util,misc,mort,net,netPaid};
 }
 
-function targetAnnual(){ return S.primaryPaidOff ? Math.max(0,num(S.target300)) : Math.max(0,num(S.target400)); }
+function targetAnnual(){ return Math.max(0,num(S.target400)); }
 function countedOtherMonthly(){ return S.other.reduce((a,o)=> a + (o.count?Math.max(0,num(o.monthly)):0), 0); }
 function totalDoors(){ return S.current.reduce((a,p)=>a+Math.max(0,Math.round(num(p.units))),0); }
 
@@ -648,8 +667,9 @@ function baseOpts(title,fy){
 /* ---------- render everything ---------- */
 function renderPortfolio(){
   const strat=S.strategy;
-  document.querySelectorAll(".strCol").forEach(e=>e.style.display = strat==="STR_MTR"?"":"none");
-  document.querySelectorAll(".ltrCol").forEach(e=>e.style.display = strat==="LTR"?"":"none");
+  // toggle column visibility via body class so dynamically-built cells obey it too
+  document.body.classList.toggle("ltrView", strat==="LTR");
+  document.body.classList.toggle("strView", strat!=="LTR");
   const tb=$("portfolioBody"); tb.innerHTML="";
   let tU=0,tInc=0,tNet=0,tDebt=0;
   S.current.forEach((p,i)=>{
@@ -665,12 +685,12 @@ function renderPortfolio(){
       `<td class="strCol"><input data-i="${i}" data-f="utilities" type="number" value="${p.utilities}"></td>`+
       `<td><input data-i="${i}" data-f="misc" type="number" value="${p.misc}"></td>`+
       `<td><input class="${p.estimate?'flagEstimate':''}" data-i="${i}" data-f="loanBalance" type="number" value="${p.loanBalance}" title="${p.estimate?'Estimate — affects payoff order':''}"></td>`+
-      `<td>${fmt(c.net)}</td>`+
+      `<td class="netcell"><span class="${c.net<0?'neg':''}">${fmt(c.net)}</span></td>`+
       `<td><button class="rowdel" data-del="${i}">×</button></td>`;
     tb.appendChild(tr);
   });
   $("ptUnits").textContent=tU; $("ptIncome").textContent=fmt(tInc);
-  $("ptNet").textContent=fmt(tNet); $("ptDebt").textContent=fmt(tDebt);
+  $("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`; $("ptDebt").textContent=fmt(tDebt);
 
   // other income
   const ob=$("otherBody"); ob.innerHTML="";
@@ -683,13 +703,18 @@ function renderPortfolio(){
     ob.appendChild(tr);
   });
 
-  $("cDoors").textContent=totalDoors();
-  $("cNowIncome").textContent=fmt((currentMortgagedMonthly(strat)+countedOtherMonthly())*12)+"/yr";
-  $("cPaidOff").textContent=fmt((currentPaidOffMonthly(strat)+countedOtherMonthly())*12)+"/yr";
-  const gap=targetAnnual()-(currentMortgagedMonthly(strat)+countedOtherMonthly())*12;
-  $("cGap").textContent=fmt(Math.max(0,gap))+"/yr";
+  applyNowCards(strat);
   $("nowStratPill").className="pill "+(strat==="STR_MTR"?"str":"ltr");
   $("nowStratPill").textContent=strat==="STR_MTR"?"STR / MTR view":"LTR view";
+}
+// shared current-state cards + green now-income box (used by both render paths)
+function applyNowCards(strat){
+  const nowMo = currentMortgagedMonthly(strat)+countedOtherMonthly();
+  $("cDoors").textContent=totalDoors();
+  $("cNowIncome").textContent=fmt(nowMo*12)+"/yr";
+  $("cPaidOff").textContent=fmt((currentPaidOffMonthly(strat)+countedOtherMonthly())*12)+"/yr";
+  $("cGap").textContent=fmt(Math.max(0,targetAnnual()-nowMo*12))+"/yr";
+  $("ngMo").textContent=fmt(nowMo); $("ngYr").textContent=fmt(nowMo*12);
 }
 function esc(s){ return String(s).replace(/"/g,"&quot;"); }
 
@@ -729,7 +754,7 @@ function applyPlan(r, strat){
   const stratName = strat==="STR_MTR"?"STR/MTR":"LTR";
   let plan;
   if(r.fireYear===0){
-    plan=`You're <b>already at</b> your ${fmt0(targetAnnual())}/yr target under ${stratName}. Consider the lower $300K goal or coast.`;
+    plan=`You're <b>already at</b> your ${fmt0(targetAnnual())}/yr target under ${stratName}. You could coast or lower the target.`;
   } else if(r.reached){
     const acq = r.acqCompleteYear!=null? `acquisition done ~year ${r.acqCompleteYear}` : "keep acquiring";
     plan=`Buy <b>${r.doorsToBuy}</b> more doors (${acq}), then snowball payoffs → <b>FIRE in year ${r.fireYear}</b> (${fmt0(r.passiveAtFire)}/yr passive) under ${stratName}.`;
@@ -816,14 +841,10 @@ function render(){
 
 /* ---------- form binding ---------- */
 function bindInputs(){
-  const map={
-    target400:"target400",target300:"target300",spendNeed:"spendNeed",rentGrowth:"rentGrowth",
-  };
   // goal
-  $("target400").value=S.target400; $("target300").value=S.target300;
+  $("target400").value=S.target400;
   $("spendNeed").value=S.spendNeed??""; $("rentGrowth").value=S.rentGrowth;
   $("ltrMiscFactor").value=S.ltrMiscFactor;
-  $("primaryPaidOff").checked=S.primaryPaidOff;
   // template
   const t=S.tmpl; $("t_price").value=t.price;$("t_down").value=t.down;$("t_closing").value=t.closing;
   $("t_rate").value=t.rate;$("t_term").value=t.term;$("t_tax").value=t.tax;$("t_ins").value=t.ins;$("t_hoa").value=t.hoa;
@@ -833,11 +854,9 @@ function bindInputs(){
 
   const wire=(id,fn)=>$(id).addEventListener("input",()=>{fn($(id).value);render();});
   wire("target400",v=>S.target400=num(v));
-  wire("target300",v=>S.target300=num(v));
   wire("spendNeed",v=>S.spendNeed = v===""?null:num(v));
   wire("rentGrowth",v=>S.rentGrowth=num(v));
   wire("ltrMiscFactor",v=>S.ltrMiscFactor=Math.max(0,num(v)));
-  $("primaryPaidOff").addEventListener("change",()=>{S.primaryPaidOff=$("primaryPaidOff").checked;render();});
   const tf=(id,obj,key)=>$(id).addEventListener("input",()=>{obj[key]=num($(id).value);render();});
   tf("t_price",t,"price");tf("t_down",t,"down");tf("t_closing",t,"closing");tf("t_rate",t,"rate");
   tf("t_term",t,"term");tf("t_tax",t,"tax");tf("t_ins",t,"ins");tf("t_hoa",t,"hoa");
@@ -894,9 +913,9 @@ function softRefresh(){
   const rows=$("portfolioBody").children;
   S.current.forEach((p,i)=>{
     const c=curNet(p,strat); tU+=Math.max(0,Math.round(num(p.units))); tInc+=(strat==="LTR"?num(p.ltrRent):num(p.income)); tNet+=c.net; tDebt+=num(p.loanBalance);
-    if(rows[i]){ const cells=rows[i].children; cells[8].textContent=fmt(c.net); }
+    if(rows[i]){ const cells=rows[i].children; cells[8].innerHTML=`<span class="${c.net<0?'neg':''}">${fmt(c.net)}</span>`; }
   });
-  $("ptUnits").textContent=tU;$("ptIncome").textContent=fmt(tInc);$("ptNet").textContent=fmt(tNet);$("ptDebt").textContent=fmt(tDebt);
+  $("ptUnits").textContent=tU;$("ptIncome").textContent=fmt(tInc);$("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`;$("ptDebt").textContent=fmt(tDebt);
   // recompute the heavy stuff
   rerenderOutputs();
 }
@@ -907,11 +926,8 @@ function rerenderOutputs(){
 }
 function renderScenariosOnly(){
   // re-run everything except the portfolio input rebuild
-  $("cDoors").textContent=totalDoors();
   const strat=S.strategy;
-  $("cNowIncome").textContent=fmt((currentMortgagedMonthly(strat)+countedOtherMonthly())*12)+"/yr";
-  $("cPaidOff").textContent=fmt((currentPaidOffMonthly(strat)+countedOtherMonthly())*12)+"/yr";
-  $("cGap").textContent=fmt(Math.max(0,targetAnnual()-(currentMortgagedMonthly(strat)+countedOtherMonthly())*12))+"/yr";
+  applyNowCards(strat);
   const runs={best:simulate(strat,SCN.best),real:simulate(strat,SCN.real),worst:simulate(strat,SCN.worst),base:simulate(strat,SCN.base)};
   $("scenarioBody").innerHTML=scnRow("Best","scn-best",runs.best)+scnRow("Realistic","scn-real",runs.real)+scnRow("Worst","scn-worst",runs.worst)+scnRow("Do-nothing","scn-base",runs.base);
   const r=runs.real;
