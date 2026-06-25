@@ -72,6 +72,17 @@
   tr.total td{font-weight:700;border-top:2px solid var(--line)}
   .rowdel{cursor:pointer;color:var(--muted);border:0;background:transparent;font-size:16px}
   .rowdel:hover{color:var(--bad)}
+  .rowexp{cursor:pointer;border:0;background:transparent;color:var(--muted);font-size:13px;transition:transform .15s,color .15s;padding:2px 4px}
+  .rowexp.open{transform:rotate(90deg);color:var(--accent)}
+  td.piticell{font-weight:700}
+  tr.detail>td{padding:0;border-bottom:1px solid var(--line)}
+  .detailbox{background:var(--panel2);border:1px solid var(--line);border-radius:11px;margin:2px 0 12px;padding:14px 16px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .detailbox .field label{font-size:11px;text-transform:none}
+  .detailbox .ck{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt)}
+  .detailbox .ck input{width:auto}
+  .detailcalc{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:20px;border-top:1px dashed var(--line);padding-top:10px;font-size:13px;color:var(--muted)}
+  .detailcalc b{color:var(--txt)} .detailcalc .gd{color:var(--good);font-weight:700}
   /* column visibility by strategy (robust against table rebuilds) */
   .strView .ltrCol{display:none}
   .ltrView .strCol{display:none}
@@ -155,17 +166,17 @@
   <!-- 1. WHERE I AM NOW -->
   <section>
     <h2><span class="step">1</span> Where I am now <span class="pill" id="nowStratPill"></span></h2>
-    <p class="hint">Your current portfolio &amp; income — editable. Income/expenses are full-building totals. Net = income − mortgage − utilities − misc.</p>
+    <p class="hint">Your current portfolio &amp; income — editable. Click <b>▸</b> on a row to set value, loan balance, interest rate &amp; taxes (computes PITI &amp; equity). Net = income − PITI − utilities − misc.</p>
     <div style="overflow-x:auto">
     <table id="portfolioTbl">
       <thead><tr>
-        <th>Property</th><th>Units</th><th class="strCol">Income/mo</th><th class="ltrCol">LTR rent/mo</th>
-        <th>Mortgage/mo</th><th class="strCol">Utilities/mo</th><th>Misc/mo</th><th>Loan balance</th><th>Net/mo</th><th></th>
+        <th></th><th>Property</th><th>Units</th><th class="strCol">Income/mo</th><th class="ltrCol">LTR rent/mo</th>
+        <th>PITI/mo</th><th class="strCol">Utilities/mo</th><th>Misc/mo</th><th>Net/mo</th><th></th>
       </tr></thead>
       <tbody id="portfolioBody"></tbody>
       <tfoot><tr class="total">
-        <td>Total</td><td id="ptUnits">0</td><td class="strCol" id="ptIncome">$0</td><td class="ltrCol"></td>
-        <td></td><td class="strCol"></td><td></td><td id="ptDebt">$0</td><td class="netcell" id="ptNet">$0</td><td></td>
+        <td></td><td>Total</td><td id="ptUnits">0</td><td class="strCol" id="ptIncome">$0</td><td class="ltrCol"></td>
+        <td id="ptPiti"></td><td class="strCol"></td><td></td><td class="netcell" id="ptNet">$0</td><td></td>
       </tr></tfoot>
     </table>
     </div>
@@ -184,6 +195,9 @@
       <div class="card"><div class="k">Current passive (mortgaged)</div><div class="v sm" id="cNowIncome">$0</div></div>
       <div class="card"><div class="k">End-state (paid-off) net</div><div class="v sm" id="cPaidOff">$0</div></div>
       <div class="card warn"><div class="k">Gap to target</div><div class="v sm" id="cGap">$0</div></div>
+      <div class="card good"><div class="k">Current equity</div><div class="v sm" id="cEquity">$0</div></div>
+      <div class="card"><div class="k">Portfolio value</div><div class="v sm" id="cValue">$0</div></div>
+      <div class="card"><div class="k">Loan balance (debt)</div><div class="v sm" id="cDebt">$0</div></div>
     </div>
     <div class="nowgreen">
       <div><div class="lbl">Current passive income</div><div class="sub">rental net + counted other income, today</div></div>
@@ -301,9 +315,22 @@
     </details>
   </section>
 
-  <!-- 6. COMPARE + SENSITIVITY -->
+  <!-- 6. DEBT PAYOFF SCHEDULE -->
   <section>
-    <h2><span class="step">6</span> Strategy &amp; rate comparison</h2>
+    <h2><span class="step">6</span> Debt payoff schedule — when each door goes free &amp; clear</h2>
+    <p class="hint">Realistic scenario. The snowball clears the smallest balance first; each payoff frees that door's debt service into the next. Existing properties show by name; future doors are numbered in buy order.</p>
+    <div id="payoffSummary" class="muted" style="margin:0 0 12px;font-size:13px"></div>
+    <div style="overflow-x:auto">
+    <table id="payoffTbl">
+      <thead><tr><th>Door / property</th><th>Units</th><th>Loan balance</th><th>Paid off</th><th>Frees /mo</th></tr></thead>
+      <tbody id="payoffBody"></tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- 7. COMPARE + SENSITIVITY -->
+  <section>
+    <h2><span class="step">7</span> Strategy &amp; rate comparison</h2>
     <div class="twocol">
       <div>
         <h3 style="margin:0 0 8px">STR/MTR vs LTR (realistic)</h3>
@@ -320,6 +347,22 @@
         </table>
       </div>
     </div>
+  </section>
+
+  <!-- 8. RECOMMENDATIONS -->
+  <section>
+    <h2><span class="step">8</span> Recommendations &amp; things to think about</h2>
+    <p class="hint">Generated live from your realistic scenario under the active strategy — plus evergreen considerations.</p>
+    <ul id="recoList" class="caveats" style="font-size:13.5px;line-height:1.75"></ul>
+    <h3 style="margin:16px 0 6px;font-size:13px;color:var(--muted)">Things to think about</h3>
+    <ul class="caveats" style="font-size:13px">
+      <li><b>Taxes &amp; entity:</b> rental and management income are taxable — depreciation, cost segregation, and an LLC/holding structure can materially change your real spendable number. Loop in a CPA.</li>
+      <li><b>Cash reserves:</b> hold 3–6 months of PITI per door plus a CapEx fund before accelerating payoffs — STR/MTR income is lumpier than LTR.</li>
+      <li><b>Interest-rate &amp; refinance risk:</b> rate drives per-door cash flow more than any other lever (see the sensitivity table) — refinance when it makes sense.</li>
+      <li><b>STR/MTR regulation &amp; insurance:</b> Tallahassee/FL short-term-rental rules, occupancy seasonality, and hurricane insurance can flip the STR-vs-LTR math — revisit the toggle yearly.</li>
+      <li><b>Liquidity &amp; diversification:</b> paying everything off maximizes cash flow but concentrates wealth in illiquid real estate — consider keeping some leverage or liquid assets.</li>
+      <li><b>Appreciation &amp; exit:</b> this model ignores appreciation (conservative) — real equity/net worth is likely higher; plan refis or 1031 exchanges as part of the path.</li>
+    </ul>
   </section>
 
   <!-- CAVEATS -->
@@ -353,9 +396,9 @@ function defaults(){
     target400:400000,
     spendNeed:null, rentGrowth:0,
     current:[
-      {name:"Cactus St (duplex)", units:2, income:6000, ltrRent:3429, mortgage:1500, utilities:600, misc:400, loanBalance:225000, estimate:true},
-      {name:"Hancock St (duplex)",units:2, income:6000, ltrRent:3429, mortgage:2500, utilities:600, misc:500, loanBalance:300000, estimate:true},
-      {name:"Lanrell",            units:1, income:3750, ltrRent:2143, mortgage:1100, utilities:600, misc:400, loanBalance:165000, estimate:true},
+      {name:"Cactus St (duplex)", units:2, income:6000, ltrRent:3429, mortgage:1500, utilities:600, misc:400, loanBalance:225000, value:320000, rate:6.5, term:30, taxAnnual:3600, insAnnual:1800, useDetailed:false, expanded:false, estimate:true},
+      {name:"Hancock St (duplex)",units:2, income:6000, ltrRent:3429, mortgage:2500, utilities:600, misc:500, loanBalance:300000, value:430000, rate:6.5, term:30, taxAnnual:4200, insAnnual:2000, useDetailed:false, expanded:false, estimate:true},
+      {name:"Lanrell",            units:1, income:3750, ltrRent:2143, mortgage:1100, utilities:600, misc:400, loanBalance:165000, value:235000, rate:6.5, term:30, taxAnnual:2600, insAnnual:1400, useDetailed:false, expanded:false, estimate:true},
     ],
     ltrMiscFactor:0.5,
     other:[ {name:"Management income", monthly:2000, count:true} ],
@@ -375,15 +418,43 @@ function load(){
     const d = defaults();
     // shallow shape-validate / merge to survive schema drift
     if(typeof o!=="object"||!Array.isArray(o.current)||!o.tmpl) return d;
-    return Object.assign(d, o, {
+    const merged = Object.assign(d, o, {
       tmpl:Object.assign(d.tmpl,o.tmpl||{}),
       str:Object.assign(d.str,o.str||{}),
       ltr:Object.assign(d.ltr,o.ltr||{}),
       eng:Object.assign(d.eng,o.eng||{}),
     });
+    // backfill new per-property fields for older saved data
+    merged.current = (Array.isArray(merged.current)?merged.current:[]).map(p=>{
+      const q=Object.assign({units:1,income:0,ltrRent:0,mortgage:0,utilities:0,misc:0,loanBalance:0,
+        rate:6.5,term:30,taxAnnual:0,insAnnual:0,useDetailed:false,expanded:false}, p||{});
+      if(!(num(q.value)>0)) q.value=Math.round(Math.max(0,num(q.loanBalance))/0.7); // estimate ~70% LTV
+      return q;
+    });
+    return merged;
   }catch(e){ return defaults(); }
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ---------- mortgage / equity helpers ---------- */
+function amortPI(balance, ratePct, termYrs){
+  const bal=Math.max(0,balance), n=Math.max(1,Math.round(termYrs||30))*12, r=Math.max(0,ratePct)/100/12;
+  if(bal<=0) return 0;
+  return r===0 ? bal/n : bal*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1);
+}
+function propEscrow(p){ return (Math.max(0,num(p.taxAnnual))+Math.max(0,num(p.insAnnual)))/12; }
+// returns monthly {pi, escrow, piti}; detailed = P&I(from rate)+escrow, simple = single lump
+function propPITI(p){
+  if(p.useDetailed){
+    const pi=amortPI(num(p.loanBalance), num(p.rate), num(p.term)), esc=propEscrow(p);
+    return {pi, escrow:esc, piti:pi+esc, detailed:true};
+  }
+  const m=Math.max(0,num(p.mortgage));
+  return {pi:m, escrow:0, piti:m, detailed:false};
+}
+function currentEquity(){ return S.current.reduce((a,p)=> a + (Math.max(0,num(p.value)) - Math.max(0,num(p.loanBalance))), 0); }
+function portfolioValue(){ return S.current.reduce((a,p)=> a + Math.max(0,num(p.value)), 0); }
+function currentDebt(){ return S.current.reduce((a,p)=> a + Math.max(0,num(p.loanBalance)), 0); }
 
 /* ---------- per-door economics for a strategy ---------- */
 function ltrBaseRent(){ return Math.max(0, num(S.ltr.rent)); }
@@ -420,10 +491,11 @@ function curNet(p, strategy){
   const income = strategy==="LTR" ? Math.max(0,num(p.ltrRent)) : Math.max(0,num(p.income));
   const util = strategy==="LTR" ? 0 : Math.max(0,num(p.utilities));
   const misc = strategy==="LTR" ? Math.max(0,num(p.misc))*Math.max(0,num(S.ltrMiscFactor)) : Math.max(0,num(p.misc));
-  const mort = Math.max(0,num(p.mortgage));
-  const net = income - mort - util - misc;          // mortgaged monthly net
-  const netPaid = income - util - misc;             // mortgage gone
-  return {income,util,misc,mort,net,netPaid};
+  const m = propPITI(p);
+  const net = income - m.piti - util - misc;        // mortgaged monthly net
+  const netPaid = income - m.escrow - util - misc;  // P&I gone; escrow (detailed) stays, simple removes whole lump
+  return {income,util,misc, piti:m.piti, pi:m.pi, escrow:m.escrow, net, netPaid,
+          value:Math.max(0,num(p.value)), loanBalance:Math.max(0,num(p.loanBalance))};
 }
 
 function targetAnnual(){ return Math.max(0,num(S.target400)); }
@@ -448,24 +520,25 @@ function doorsToAcquire(strategy){
 /* ---------- simulation engine ---------- */
 function buildHoldings(strategy){
   // existing properties as holdings (one holding per property; units tracked for door counts)
-  const rateProxy = Math.max(0,num(S.tmpl.rate))/100/12;
-  return S.current.map(p=>{
+  return S.current.map((p,i)=>{
     const c = curNet(p,strategy);
+    const bal = Math.max(0,num(p.loanBalance));
+    const rateM = (p.useDetailed? Math.max(0,num(p.rate)) : Math.max(0,num(S.tmpl.rate)))/100/12;
     return {
-      kind:"current", units:Math.max(0,Math.round(num(p.units))),
-      rentContribution:c.income, fixedMort:c.mort+c.util+c.misc, fixedPaid:c.util+c.misc,
-      loanBalance:Math.max(0,num(p.loanBalance)), rateM:rateProxy, payment:c.mort,
-      down:0, paidOff:Math.max(0,num(p.loanBalance))<=0, principalPaid:0
+      kind:"current", label:p.name||("Property "+(i+1)), units:Math.max(0,Math.round(num(p.units))),
+      rentContribution:c.income, fixedMort:c.piti+c.util+c.misc, fixedPaid:c.escrow+c.util+c.misc,
+      loanBalance:bal, balance0:bal, rateM, payment:c.pi, freesMonthly:c.pi,
+      down:0, paidOff:bal<=0, principalPaid:0, payoffYear:bal<=0?0:null
     };
   });
 }
 
-function newHolding(d){
+function newHolding(d, idx){
   return {
-    kind:"new", units:1,
+    kind:"new", label:"New door #"+idx, units:1,
     rentContribution:d.rentContribution, fixedMort:d.fixedMort, fixedPaid:d.fixedPaid,
-    loanBalance:d.loan, rateM:d.rate/100/12, payment:d.payment,
-    down:d.cashToAcquire, principalPaid:0, paidOff:d.loan<=0
+    loanBalance:d.loan, balance0:d.loan, rateM:d.rate/100/12, payment:d.payment, freesMonthly:d.PI,
+    down:d.downPayment, principalPaid:0, paidOff:d.loan<=0, payoffYear:null
   };
 }
 
@@ -509,7 +582,7 @@ function simulate(strategy, scn){
   const contrib = Math.max(0, num(S.eng.contrib)*(scn.contribMul||1));
 
   let holdings = buildHoldings(strategy);
-  let acquired = 0, carry = 0, equityBase = 0, paceAccrual = 0;
+  let acquired = 0, carry = 0, equityBase = currentEquity(), paceAccrual = 0;
   let fireYear = null, acqCompleteYear = (dWanted===0?0:null);
   let stalledAcq = 0, payoffStall = 0, stopReason = "";
   let prevCapAvail = -1, lastDebt = Infinity;
@@ -548,7 +621,7 @@ function simulate(strategy, scn){
       const cost = newD.cashToAcquire;
       let bought = 0;
       for(let k=0;k<wholeWanted;k++){
-        if(cost>0 && pool>=cost){ pool-=cost; holdings.push(newHolding(newD)); equityBase+=newD.downPayment; bought++; acquired++; }
+        if(cost>0 && pool>=cost){ pool-=cost; holdings.push(newHolding(newD, acquired+1)); equityBase+=newD.downPayment; bought++; acquired++; }
         else break;
       }
       paceAccrual -= bought;
@@ -565,7 +638,7 @@ function simulate(strategy, scn){
       const interest = h.loanBalance*h.rateM*12;
       const principal = Math.min(Math.max(0, h.payment*12 - interest), h.loanBalance);
       h.loanBalance-=principal; h.principalPaid+=principal;
-      if(h.loanBalance<=1){ h.loanBalance=0; h.paidOff=true; }
+      if(h.loanBalance<=1){ h.loanBalance=0; h.paidOff=true; if(h.payoffYear==null) h.payoffYear=y; }
     });
 
     // Phase 2: snowball remaining pool into smallest balances (within-year cascade, oldest-first tie-break)
@@ -577,7 +650,7 @@ function simulate(strategy, scn){
         if(!cand.length) break;
         const h = cand[0], pay = Math.min(pool, h.loanBalance);
         h.loanBalance-=pay; h.principalPaid+=pay; pool-=pay;
-        if(h.loanBalance<=1){ h.loanBalance=0; h.paidOff=true; }
+        if(h.loanBalance<=1){ h.loanBalance=0; h.paidOff=true; if(h.payoffYear==null) h.payoffYear=y; }
       }
     }
     carry = Math.max(0,pool);
@@ -605,7 +678,8 @@ function simulate(strategy, scn){
     passiveAtFire:(fireRec||last).passive,
     equityAtFire:(fireRec||last).equity,
     totalCapital: acquired * newD.cashToAcquire,
-    reached: fireYear!=null
+    reached: fireYear!=null,
+    payoffs: holdings.map(h=>({label:h.label, units:h.units, balance0:h.balance0, year:h.payoffYear, frees:h.freesMonthly, paid:h.paidOff}))
   };
 }
 
@@ -703,26 +777,35 @@ function renderPortfolio(){
   document.body.classList.toggle("ltrView", strat==="LTR");
   document.body.classList.toggle("strView", strat!=="LTR");
   const tb=$("portfolioBody"); tb.innerHTML="";
-  let tU=0,tInc=0,tNet=0,tDebt=0;
+  let tU=0,tInc=0,tNet=0,tPiti=0;
   S.current.forEach((p,i)=>{
-    const c=curNet(p,strat);
-    tU+=Math.max(0,Math.round(num(p.units))); tInc+=(strat==="LTR"?num(p.ltrRent):num(p.income)); tNet+=c.net; tDebt+=num(p.loanBalance);
-    const tr=document.createElement("tr");
-    tr.innerHTML=
+    const c=curNet(p,strat); const open=!!p.expanded;
+    tU+=Math.max(0,Math.round(num(p.units))); tInc+=(strat==="LTR"?num(p.ltrRent):num(p.income)); tNet+=c.net; tPiti+=c.piti;
+    const pitiCell = p.useDetailed
+      ? `<td class="piticell"><span class="pitival" title="Computed from rate + balance + tax/ins">${fmt(c.piti)}</span></td>`
+      : `<td class="piticell"><input data-i="${i}" data-f="mortgage" type="number" value="${p.mortgage}"></td>`;
+    const main=document.createElement("tr");
+    main.setAttribute("data-row",i);
+    main.innerHTML=
+      `<td><button class="rowexp ${open?'open':''}" data-exp="${i}" title="Mortgage &amp; equity details">▸</button></td>`+
       `<td><input class="name" data-i="${i}" data-f="name" value="${esc(p.name)}"></td>`+
       `<td><input data-i="${i}" data-f="units" type="number" value="${p.units}" style="width:56px"></td>`+
       `<td class="strCol"><input data-i="${i}" data-f="income" type="number" value="${p.income}"></td>`+
       `<td class="ltrCol"><input data-i="${i}" data-f="ltrRent" type="number" value="${p.ltrRent}"></td>`+
-      `<td><input data-i="${i}" data-f="mortgage" type="number" value="${p.mortgage}"></td>`+
+      pitiCell+
       `<td class="strCol"><input data-i="${i}" data-f="utilities" type="number" value="${p.utilities}"></td>`+
       `<td><input data-i="${i}" data-f="misc" type="number" value="${p.misc}"></td>`+
-      `<td><input class="${p.estimate?'flagEstimate':''}" data-i="${i}" data-f="loanBalance" type="number" value="${p.loanBalance}" title="${p.estimate?'Estimate — affects payoff order':''}"></td>`+
       `<td class="netcell"><span class="${c.net<0?'neg':''}">${fmt(c.net)}</span></td>`+
       `<td><button class="rowdel" data-del="${i}">×</button></td>`;
-    tb.appendChild(tr);
+    tb.appendChild(main);
+    const det=document.createElement("tr");
+    det.className="detail"; det.style.display=open?"":"none";
+    det.innerHTML=`<td colspan="10">${detailBox(p,i)}</td>`;
+    tb.appendChild(det);
   });
   $("ptUnits").textContent=tU; $("ptIncome").textContent=fmt(tInc);
-  $("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`; $("ptDebt").textContent=fmt(tDebt);
+  $("ptPiti").textContent=fmt(tPiti);
+  $("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`;
 
   // other income
   const ob=$("otherBody"); ob.innerHTML="";
@@ -746,9 +829,30 @@ function applyNowCards(strat){
   $("cNowIncome").textContent=fmt(nowMo*12)+"/yr";
   $("cPaidOff").textContent=fmt((currentPaidOffMonthly(strat)+countedOtherMonthly())*12)+"/yr";
   $("cGap").textContent=fmt(Math.max(0,targetAnnual()-nowMo*12))+"/yr";
+  $("cEquity").textContent=fmt(currentEquity());
+  $("cValue").textContent=fmt(portfolioValue());
+  $("cDebt").textContent=fmt(currentDebt());
   $("ngMo").textContent=fmt(nowMo); $("ngYr").textContent=fmt(nowMo*12);
 }
 function esc(s){ return String(s).replace(/"/g,"&quot;"); }
+function detailCalc(p){
+  const m=propPITI(p), eq=Math.max(0,num(p.value))-Math.max(0,num(p.loanBalance));
+  return `P&amp;I <b>${fmt(m.pi)}</b>/mo · Escrow (tax+ins) <b>${fmt(m.escrow)}</b>/mo · `+
+    `PITI <b>${fmt(m.piti)}</b>/mo · Equity (value − loan) <span class="gd">${fmt(eq)}</span>`;
+}
+function detailBox(p,i){
+  return `<div class="detailbox">`+
+    `<label class="ck"><input type="checkbox" data-i="${i}" data-f="useDetailed" ${p.useDetailed?"checked":""}> `+
+      `Compute PITI from interest rate (otherwise the PITI/mo field is a single lump sum)</label>`+
+    `<div class="field"><label>Market value $</label><input data-i="${i}" data-f="value" type="number" value="${num(p.value)}"></div>`+
+    `<div class="field"><label>Loan balance $</label><input class="${p.estimate?'flagEstimate':''}" data-i="${i}" data-f="loanBalance" type="number" value="${num(p.loanBalance)}" title="${p.estimate?'Estimate — affects payoff order':''}"></div>`+
+    `<div class="field"><label>Interest rate %</label><input data-i="${i}" data-f="rate" type="number" step="0.1" value="${num(p.rate)}"></div>`+
+    `<div class="field"><label>Term yrs</label><input data-i="${i}" data-f="term" type="number" value="${num(p.term)}"></div>`+
+    `<div class="field"><label>Property tax $/yr</label><input data-i="${i}" data-f="taxAnnual" type="number" value="${num(p.taxAnnual)}"></div>`+
+    `<div class="field"><label>Insurance $/yr</label><input data-i="${i}" data-f="insAnnual" type="number" value="${num(p.insAnnual)}"></div>`+
+    `<div class="detailcalc" data-calc="${i}">${detailCalc(p)}</div>`+
+  `</div>`;
+}
 
 function renderTemplate(){
   const strat=S.strategy;
@@ -817,6 +921,48 @@ function applyDoorExplain(strat, rReal){
   el.innerHTML = `A generic new door nets <b>${fmt(newPaid)}/mo</b> once paid off — vs ~<b>${fmt(existAvg)}/mo</b> for your existing doors and your <b>$2,000</b> rule of thumb. New ${strat==="STR_MTR"?"STR/MTR":"LTR"} buys at ${num(S.tmpl.rate)}% carry more debt and expenses, which is why the door count is higher than a quick "$2K × N" estimate.`;
 }
 
+// debt payoff schedule (realistic) — when each door goes free & clear
+function renderPayoff(sim){
+  const ps=(sim.payoffs||[]).slice().sort((x,y)=>{
+    const ax=x.year==null?1e9:x.year, ay=y.year==null?1e9:y.year; return (ax-ay) || (y.balance0-x.balance0);
+  });
+  const tb=$("payoffBody"); if(!tb) return; tb.innerHTML="";
+  let cleared=0, lastYr=0, retired=0;
+  ps.forEach(p=>{
+    let yr;
+    if(p.year==null) yr=`<span class="muted">&gt;${sim.horizon} yr</span>`;
+    else if(p.year===0) yr=`<span class="muted">owned free</span>`;
+    else { yr=`<b>Year ${p.year}</b>`; cleared++; lastYr=Math.max(lastYr,p.year); retired+=p.balance0; }
+    tb.innerHTML+=`<tr><td>${esc(p.label)}</td><td>${p.units}</td><td>${fmt(p.balance0)}</td><td>${yr}</td><td>${fmt(p.frees)}</td></tr>`;
+  });
+  $("payoffSummary").innerHTML = ps.length
+    ? `<b>${cleared}</b> of ${ps.length} loans cleared within the horizon`+(lastYr?`, last in <b>year ${lastYr}</b>`:``)+`; total debt retired <b>${fmt(retired)}</b>.`
+    : "No debt to pay off.";
+}
+
+// live recommendations from the realistic run + STR/LTR compare
+function renderRecommendations(runs, strat, aStr, bLtr){
+  const r=runs.real, sName=strat==="STR_MTR"?"STR/MTR":"LTR", recs=[];
+  if(r.fireYear===0) recs.push(`You're already at your ${fmt0(targetAnnual())}/yr target under ${sName} — shift focus from growth to protecting income (reserves, insurance, taxes).`);
+  else if(r.reached) recs.push(`<b>Primary path:</b> buy <b>${r.doorsToBuy}</b> doors (acquisition done ~year ${r.acqCompleteYear}), then stop and snowball → FIRE in <b>year ${r.fireYear}</b> (${fmt0(r.passiveAtFire)}/yr) under ${sName}.`);
+  else recs.push(`<b>Target isn't reached in ${r.horizon} yrs</b> at current inputs (${r.stopReason||"constrained"}). Highest-leverage fixes: raise your annual contribution, push rents, or lower purchase price.`);
+  if(aStr.reached && bLtr.reached){
+    const faster=aStr.fireYear<=bLtr.fireYear?"STR/MTR":"LTR", d=Math.abs(aStr.fireYear-bLtr.fireYear);
+    recs.push(d===0?`STR/MTR and LTR reach FIRE the same year — choose on workload: LTR is far less hands-on.`
+      :`<b>${faster}</b> reaches FIRE ~<b>${d} yr${d>1?"s":""}</b> sooner. Weigh that against effort — STR/MTR earns more but is much more operationally intensive.`);
+  } else if(aStr.reached!==bLtr.reached){
+    recs.push(`Only <b>${aStr.reached?"STR/MTR":"LTR"}</b> reaches the target within ${r.horizon} yrs at current inputs — that should anchor your strategy choice.`);
+  }
+  if(r.newDoorNetMort<0) recs.push(`New doors are <b>cash-flow negative</b> (${fmt(r.newDoorNetMort)}/mo while mortgaged), so growth leans on your contribution. Negotiate price/rate or target higher-rent properties so each door at least breaks even.`);
+  const d0=perDoor(strat), maxPace=d0.cashToAcquire>0?(Math.max(0,num(S.eng.contrib))/d0.cashToAcquire):0;
+  if(maxPace < num(S.eng.pace)-0.05) recs.push(`Your ${fmt0(num(S.eng.contrib))}/yr contribution funds only ~<b>${maxPace.toFixed(1)} doors/yr</b> (you set ${num(S.eng.pace)}). Raise the contribution to actually hit that pace, or accept the slower realized pace in the timeline.`);
+  if(runs.base) recs.push(runs.base.reached
+    ? `Even buying nothing, paying off your current ${totalDoors()} doors reaches FIRE by year ${runs.base.fireYear} — acquisition mainly <i>accelerates</i> the timeline.`
+    : `Doing nothing (paying off only your current doors) tops out at ${fmt0(runs.base.passiveAtFire)}/yr — acquisition is required to reach ${fmt0(targetAnnual())}.`);
+  if(S.spendNeed && num(S.spendNeed)>0){ const hit=r.series.find(s=>s.passive>=num(S.spendNeed)); if(hit) recs.push(`If <b>${fmt0(num(S.spendNeed))}/yr</b> actually covers your life, you're work-optional in <b>year ${hit.y}</b> — years before the ${fmt0(targetAnnual())} stretch goal.`); }
+  const el=$("recoList"); if(el) el.innerHTML=recs.map(x=>`<li>${x}</li>`).join("");
+}
+
 function render(){
   // sanitize a couple of cross-field things
   renderPortfolio();
@@ -867,6 +1013,8 @@ function render(){
     rb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear:">"+sim.horizon}</td></tr>`;
   });
 
+  renderPayoff(r);
+  renderRecommendations(runs, strat, a, b);
   renderCharts(runs);
   save();
 }
@@ -907,7 +1055,20 @@ function bindInputs(){
     softRefresh();
   });
   $("portfolioBody").addEventListener("click",ev=>{
-    if(ev.target.dataset.del!=null){ S.current.splice(+ev.target.dataset.del,1); render(); }
+    const el=ev.target;
+    if(el.dataset.del!=null){ S.current.splice(+el.dataset.del,1); render(); return; }
+    if(el.dataset.exp!=null){
+      const i=+el.dataset.exp; S.current[i].expanded=!S.current[i].expanded;
+      el.classList.toggle("open", S.current[i].expanded);
+      const det=el.closest("tr").nextElementSibling;
+      if(det && det.classList.contains("detail")) det.style.display=S.current[i].expanded?"":"none";
+      save();
+    }
+  });
+  // useDetailed checkbox swaps the PITI cell between input and computed text → full render
+  $("portfolioBody").addEventListener("change",ev=>{
+    const el=ev.target; if(el.dataset.i==null||el.dataset.f!=="useDetailed") return;
+    S.current[+el.dataset.i].useDetailed=el.checked; render();
   });
   $("otherBody").addEventListener("input",ev=>{
     const el=ev.target; if(el.dataset.oi==null) return;
@@ -925,7 +1086,8 @@ function bindInputs(){
   });
 
   $("addPropBtn").addEventListener("click",()=>{
-    S.current.push({name:"New property",units:1,income:2000,ltrRent:1200,mortgage:800,utilities:0,misc:200,loanBalance:120000,estimate:true});
+    S.current.push({name:"New property",units:1,income:2000,ltrRent:1200,mortgage:800,utilities:0,misc:200,
+      loanBalance:120000,value:170000,rate:7,term:30,taxAnnual:1900,insAnnual:1000,useDetailed:false,expanded:true,estimate:true});
     render();
   });
   $("addOtherBtn").addEventListener("click",()=>{ S.other.push({name:"New stream",monthly:0,count:true}); render(); });
@@ -949,15 +1111,20 @@ function applyTheme(t){
 }
 // lightweight refresh that recomputes outputs but doesn't rebuild text inputs (keeps focus)
 function softRefresh(){
-  // update net cells + totals
-  const strat=S.strategy; let tU=0,tInc=0,tNet=0,tDebt=0;
-  const rows=$("portfolioBody").children;
+  // update net/PITI cells + detail calc + totals WITHOUT rebuilding inputs (keeps focus)
+  const strat=S.strategy; let tU=0,tInc=0,tNet=0,tPiti=0;
   S.current.forEach((p,i)=>{
-    const c=curNet(p,strat); tU+=Math.max(0,Math.round(num(p.units))); tInc+=(strat==="LTR"?num(p.ltrRent):num(p.income)); tNet+=c.net; tDebt+=num(p.loanBalance);
-    if(rows[i]){ const cells=rows[i].children; cells[8].innerHTML=`<span class="${c.net<0?'neg':''}">${fmt(c.net)}</span>`; }
+    const c=curNet(p,strat);
+    tU+=Math.max(0,Math.round(num(p.units))); tInc+=(strat==="LTR"?num(p.ltrRent):num(p.income)); tNet+=c.net; tPiti+=c.piti;
+    const main=document.querySelector(`#portfolioBody tr[data-row="${i}"]`);
+    if(main){
+      const sp=main.querySelector(".netcell span"); if(sp){ sp.className=c.net<0?"neg":""; sp.textContent=fmt(c.net); }
+      const pv=main.querySelector(".pitival"); if(pv) pv.textContent=fmt(c.piti);
+    }
+    const calc=document.querySelector(`#portfolioBody [data-calc="${i}"]`); if(calc) calc.innerHTML=detailCalc(p);
   });
-  $("ptUnits").textContent=tU;$("ptIncome").textContent=fmt(tInc);$("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`;$("ptDebt").textContent=fmt(tDebt);
-  // recompute the heavy stuff
+  $("ptUnits").textContent=tU;$("ptIncome").textContent=fmt(tInc);$("ptPiti").textContent=fmt(tPiti);
+  $("ptNet").innerHTML=`<span class="${tNet<0?'neg':''}">${fmt(tNet)}</span>`;
   rerenderOutputs();
 }
 let rerenderTimer=null;
@@ -980,6 +1147,8 @@ function renderScenariosOnly(){
   const crow=(k,va,vb)=>`<tr><td class="muted">${k}</td><td>${va}</td><td>${vb}</td></tr>`;
   $("compareBody").innerHTML=crow("Doors to buy",a.doorsToBuy,b.doorsToBuy)+crow("Years to FIRE",a.reached?a.fireYear:"Not reached",b.reached?b.fireYear:"Not reached")+crow("Total capital",fmt(a.totalCapital),fmt(b.totalCapital))+crow("Passive @ FIRE",fmt(a.passiveAtFire),fmt(b.passiveAtFire))+crow("Equity @ FIRE",fmt(a.equityAtFire),fmt(b.equityAtFire));
   const rbb=$("rateBody"); rbb.innerHTML=""; [5,6,7,8].forEach(rt=>{const sim=simulate(strat,Object.assign({},SCN.real,{rateDelta:rt-Math.max(0,num(S.tmpl.rate))}));rbb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear:">"+sim.horizon}</td></tr>`;});
+  renderPayoff(r);
+  renderRecommendations(runs, strat, a, b);
   renderCharts(runs);
 }
 
