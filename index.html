@@ -307,7 +307,7 @@
     <details style="margin-top:14px"><summary>Year-by-year (realistic scenario)</summary>
       <div style="overflow-x:auto;margin-top:10px">
       <table id="yearTbl">
-        <thead><tr><th>Year</th><th>Doors owned</th><th>Paid off</th><th>Acquired</th>
+        <thead><tr><th>Year (calendar)</th><th>Doors owned</th><th>Paid off</th><th>Acquired</th>
           <th>Passive income/yr</th><th>Capital needed</th><th>Capital avail</th><th>Debt left</th></tr></thead>
         <tbody id="yearBody"></tbody>
       </table>
@@ -388,6 +388,8 @@ const fmt0 = n => "$"+Math.round(n).toLocaleString();
 const num = v => { const x = parseFloat(v); return isFinite(x)?x:0; };
 const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
 const KEY = "fire-system-state-v1";
+const BASE_YEAR = (()=>{ try{ return new Date().getFullYear(); }catch(e){ return 2026; } })();
+const calY = n => BASE_YEAR + Math.round(n);   // calendar year for a year-offset (year 1 = next year)
 
 /* ---------- defaults ---------- */
 function defaults(){
@@ -729,7 +731,7 @@ function renderCharts(runs){
       ctx.beginPath(); ctx.moveTo(x,chartArea.top); ctx.lineTo(x,chartArea.bottom); ctx.stroke();
       ctx.setLineDash([]); ctx.fillStyle=mk.color; ctx.font="600 10px sans-serif";
       ctx.textAlign = i%2 ? "left" : "right";
-      ctx.fillText(" "+mk.label+" (yr "+mk.x+") ", x, chartArea.top + (i%2?10:0)); ctx.restore();
+      ctx.fillText(" "+mk.label+" · "+calY(mk.x)+" ", x, chartArea.top + (i%2?10:0)); ctx.restore();
     });
   }};
   const datasets=[
@@ -878,7 +880,7 @@ function renderTemplate(){
 
 function scnRow(label,cls,sim){
   const yrs = sim.fireYear===0?"0 (already)": (sim.reached? sim.fireYear : "Not reached");
-  const fy = sim.reached? ("Yr "+sim.fireYear) : ">"+sim.horizon+" yr";
+  const fy = sim.reached? (sim.fireYear===0?"Now":("Yr "+sim.fireYear+" · "+calY(sim.fireYear))) : ">"+sim.horizon+" yr";
   const doors = sim.unreachable? "∞" : sim.doorsToBuy;
   return `<tr><td class="${cls}"><b>${label}</b></td>`+
     `<td>${yrs}</td><td>${fy}</td><td>${doors}</td>`+
@@ -892,8 +894,8 @@ function applyPlan(r, strat){
   if(r.fireYear===0){
     plan=`You're <b>already at</b> your ${fmt0(targetAnnual())}/yr target under ${stratName}. You could coast or lower the target.`;
   } else if(r.reached){
-    const acq = r.acqCompleteYear!=null? `acquisition done ~year ${r.acqCompleteYear}` : "keep acquiring";
-    plan=`Buy <b>${r.doorsToBuy}</b> more doors (${acq}), then snowball payoffs → <b>FIRE in year ${r.fireYear}</b> (${fmt0(r.passiveAtFire)}/yr passive) under ${stratName}.`;
+    const acq = r.acqCompleteYear!=null? `acquisition done ~year ${r.acqCompleteYear} / ${calY(r.acqCompleteYear)}` : "keep acquiring";
+    plan=`Buy <b>${r.doorsToBuy}</b> more doors (${acq}), then snowball payoffs → <b>FIRE in year ${r.fireYear} (${calY(r.fireYear)})</b> — ${fmt0(r.passiveAtFire)}/yr passive — under ${stratName}.`;
   } else if(r.unreachable){
     plan=`Under ${stratName}, a new door loses money once paid off — buying more never reaches ${fmt0(targetAnnual())}/yr. Raise rent or lower price.`;
   } else {
@@ -906,7 +908,7 @@ function applyPlan(r, strat){
   const sr=$("spendReadout"); const sn=num(S.spendNeed);
   if(S.spendNeed!=null && sn>0){
     const hit=r.series.find(s=>s.passive>=sn);
-    sr.innerHTML = hit ? `Your real spending need of <b>${fmt0(sn)}/yr</b> is covered in <b>year ${hit.y}</b> — independence may come well before the ${fmt0(targetAnnual())} goal.`
+    sr.innerHTML = hit ? `Your real spending need of <b>${fmt0(sn)}/yr</b> is covered in <b>year ${hit.y} (${calY(hit.y)})</b> — independence may come well before the ${fmt0(targetAnnual())} goal.`
                        : `Your spending need of ${fmt0(sn)}/yr isn't covered within ${r.horizon} yrs under these inputs.`;
   } else sr.innerHTML="";
 }
@@ -932,11 +934,11 @@ function renderPayoff(sim){
     let yr;
     if(p.year==null) yr=`<span class="muted">&gt;${sim.horizon} yr</span>`;
     else if(p.year===0) yr=`<span class="muted">owned free</span>`;
-    else { yr=`<b>Year ${p.year}</b>`; cleared++; lastYr=Math.max(lastYr,p.year); retired+=p.balance0; }
+    else { yr=`<b>Year ${p.year}</b> <span class="muted">· ${calY(p.year)}</span>`; cleared++; lastYr=Math.max(lastYr,p.year); retired+=p.balance0; }
     tb.innerHTML+=`<tr><td>${esc(p.label)}</td><td>${p.units}</td><td>${fmt(p.balance0)}</td><td>${yr}</td><td>${fmt(p.frees)}</td></tr>`;
   });
   $("payoffSummary").innerHTML = ps.length
-    ? `<b>${cleared}</b> of ${ps.length} loans cleared within the horizon`+(lastYr?`, last in <b>year ${lastYr}</b>`:``)+`; total debt retired <b>${fmt(retired)}</b>.`
+    ? `<b>${cleared}</b> of ${ps.length} loans cleared within the horizon`+(lastYr?`, last in <b>year ${lastYr} (${calY(lastYr)})</b>`:``)+`; total debt retired <b>${fmt(retired)}</b>.`
     : "No debt to pay off.";
 }
 
@@ -944,7 +946,7 @@ function renderPayoff(sim){
 function renderRecommendations(runs, strat, aStr, bLtr){
   const r=runs.real, sName=strat==="STR_MTR"?"STR/MTR":"LTR", recs=[];
   if(r.fireYear===0) recs.push(`You're already at your ${fmt0(targetAnnual())}/yr target under ${sName} — shift focus from growth to protecting income (reserves, insurance, taxes).`);
-  else if(r.reached) recs.push(`<b>Primary path:</b> buy <b>${r.doorsToBuy}</b> doors (acquisition done ~year ${r.acqCompleteYear}), then stop and snowball → FIRE in <b>year ${r.fireYear}</b> (${fmt0(r.passiveAtFire)}/yr) under ${sName}.`);
+  else if(r.reached) recs.push(`<b>Primary path:</b> buy <b>${r.doorsToBuy}</b> doors (acquisition done ~year ${r.acqCompleteYear} / ${calY(r.acqCompleteYear)}), then stop and snowball → FIRE in <b>year ${r.fireYear} (${calY(r.fireYear)})</b> at ${fmt0(r.passiveAtFire)}/yr under ${sName}.`);
   else recs.push(`<b>Target isn't reached in ${r.horizon} yrs</b> at current inputs (${r.stopReason||"constrained"}). Highest-leverage fixes: raise your annual contribution, push rents, or lower purchase price.`);
   if(aStr.reached && bLtr.reached){
     const faster=aStr.fireYear<=bLtr.fireYear?"STR/MTR":"LTR", d=Math.abs(aStr.fireYear-bLtr.fireYear);
@@ -957,9 +959,9 @@ function renderRecommendations(runs, strat, aStr, bLtr){
   const d0=perDoor(strat), maxPace=d0.cashToAcquire>0?(Math.max(0,num(S.eng.contrib))/d0.cashToAcquire):0;
   if(maxPace < num(S.eng.pace)-0.05) recs.push(`Your ${fmt0(num(S.eng.contrib))}/yr contribution funds only ~<b>${maxPace.toFixed(1)} doors/yr</b> (you set ${num(S.eng.pace)}). Raise the contribution to actually hit that pace, or accept the slower realized pace in the timeline.`);
   if(runs.base) recs.push(runs.base.reached
-    ? `Even buying nothing, paying off your current ${totalDoors()} doors reaches FIRE by year ${runs.base.fireYear} — acquisition mainly <i>accelerates</i> the timeline.`
+    ? `Even buying nothing, paying off your current ${totalDoors()} doors reaches FIRE by year ${runs.base.fireYear} (${calY(runs.base.fireYear)}) — acquisition mainly <i>accelerates</i> the timeline.`
     : `Doing nothing (paying off only your current doors) tops out at ${fmt0(runs.base.passiveAtFire)}/yr — acquisition is required to reach ${fmt0(targetAnnual())}.`);
-  if(S.spendNeed && num(S.spendNeed)>0){ const hit=r.series.find(s=>s.passive>=num(S.spendNeed)); if(hit) recs.push(`If <b>${fmt0(num(S.spendNeed))}/yr</b> actually covers your life, you're work-optional in <b>year ${hit.y}</b> — years before the ${fmt0(targetAnnual())} stretch goal.`); }
+  if(S.spendNeed && num(S.spendNeed)>0){ const hit=r.series.find(s=>s.passive>=num(S.spendNeed)); if(hit) recs.push(`If <b>${fmt0(num(S.spendNeed))}/yr</b> actually covers your life, you're work-optional in <b>year ${hit.y} (${calY(hit.y)})</b> — years before the ${fmt0(targetAnnual())} stretch goal.`); }
   const el=$("recoList"); if(el) el.innerHTML=recs.map(x=>`<li>${x}</li>`).join("");
 }
 
@@ -992,7 +994,7 @@ function render(){
   const yb=$("yearBody"); yb.innerHTML="";
   r.series.forEach(s=>{
     const tight = s.capNeeded>s.capAvail+0.5;
-    yb.innerHTML+=`<tr><td>${s.y}</td><td>${s.doorsOwned}</td><td>${s.doorsPaid}</td><td>${s.acquiredThis}</td>`+
+    yb.innerHTML+=`<tr><td>${s.y===0?'Now':s.y}<span class="muted"> · ${calY(s.y)}</span></td><td>${s.doorsOwned}</td><td>${s.doorsPaid}</td><td>${s.acquiredThis}</td>`+
       `<td>${fmt(s.passive)}</td><td class="${tight?'scn-worst':''}">${fmt(s.capNeeded)}</td><td>${fmt(s.capAvail)}</td><td>${fmt(s.debt)}</td></tr>`;
   });
 
@@ -1001,7 +1003,7 @@ function render(){
   const crow=(k,va,vb)=>`<tr><td class="muted">${k}</td><td>${va}</td><td>${vb}</td></tr>`;
   $("compareBody").innerHTML=
     crow("Doors to buy",a.doorsToBuy,b.doorsToBuy)+
-    crow("Years to FIRE", a.reached?a.fireYear:"Not reached", b.reached?b.fireYear:"Not reached")+
+    crow("Years to FIRE", a.reached?(a.fireYear+" · "+calY(a.fireYear)):"Not reached", b.reached?(b.fireYear+" · "+calY(b.fireYear)):"Not reached")+
     crow("Total capital",fmt(a.totalCapital),fmt(b.totalCapital))+
     crow("Passive @ FIRE",fmt(a.passiveAtFire),fmt(b.passiveAtFire))+
     crow("Equity @ FIRE",fmt(a.equityAtFire),fmt(b.equityAtFire));
@@ -1010,7 +1012,7 @@ function render(){
   const rb=$("rateBody"); rb.innerHTML="";
   [5,6,7,8].forEach(rt=>{
     const sim=simulate(strat,Object.assign({},SCN.real,{rateDelta:rt-Math.max(0,num(S.tmpl.rate))}));
-    rb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear:">"+sim.horizon}</td></tr>`;
+    rb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear+" · "+calY(sim.fireYear):">"+sim.horizon}</td></tr>`;
   });
 
   renderPayoff(r);
@@ -1142,11 +1144,11 @@ function renderScenariosOnly(){
   applyPlan(r, strat);
   applyDoorExplain(strat, r);
   const yb=$("yearBody"); yb.innerHTML=""; r.series.forEach(s=>{const tight=s.capNeeded>s.capAvail+0.5;
-    yb.innerHTML+=`<tr><td>${s.y}</td><td>${s.doorsOwned}</td><td>${s.doorsPaid}</td><td>${s.acquiredThis}</td><td>${fmt(s.passive)}</td><td class="${tight?'scn-worst':''}">${fmt(s.capNeeded)}</td><td>${fmt(s.capAvail)}</td><td>${fmt(s.debt)}</td></tr>`;});
+    yb.innerHTML+=`<tr><td>${s.y===0?'Now':s.y}<span class="muted"> · ${calY(s.y)}</span></td><td>${s.doorsOwned}</td><td>${s.doorsPaid}</td><td>${s.acquiredThis}</td><td>${fmt(s.passive)}</td><td class="${tight?'scn-worst':''}">${fmt(s.capNeeded)}</td><td>${fmt(s.capAvail)}</td><td>${fmt(s.debt)}</td></tr>`;});
   const a=simulate("STR_MTR",SCN.real),b=simulate("LTR",SCN.real);
   const crow=(k,va,vb)=>`<tr><td class="muted">${k}</td><td>${va}</td><td>${vb}</td></tr>`;
-  $("compareBody").innerHTML=crow("Doors to buy",a.doorsToBuy,b.doorsToBuy)+crow("Years to FIRE",a.reached?a.fireYear:"Not reached",b.reached?b.fireYear:"Not reached")+crow("Total capital",fmt(a.totalCapital),fmt(b.totalCapital))+crow("Passive @ FIRE",fmt(a.passiveAtFire),fmt(b.passiveAtFire))+crow("Equity @ FIRE",fmt(a.equityAtFire),fmt(b.equityAtFire));
-  const rbb=$("rateBody"); rbb.innerHTML=""; [5,6,7,8].forEach(rt=>{const sim=simulate(strat,Object.assign({},SCN.real,{rateDelta:rt-Math.max(0,num(S.tmpl.rate))}));rbb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear:">"+sim.horizon}</td></tr>`;});
+  $("compareBody").innerHTML=crow("Doors to buy",a.doorsToBuy,b.doorsToBuy)+crow("Years to FIRE",a.reached?(a.fireYear+" · "+calY(a.fireYear)):"Not reached",b.reached?(b.fireYear+" · "+calY(b.fireYear)):"Not reached")+crow("Total capital",fmt(a.totalCapital),fmt(b.totalCapital))+crow("Passive @ FIRE",fmt(a.passiveAtFire),fmt(b.passiveAtFire))+crow("Equity @ FIRE",fmt(a.equityAtFire),fmt(b.equityAtFire));
+  const rbb=$("rateBody"); rbb.innerHTML=""; [5,6,7,8].forEach(rt=>{const sim=simulate(strat,Object.assign({},SCN.real,{rateDelta:rt-Math.max(0,num(S.tmpl.rate))}));rbb.innerHTML+=`<tr><td>${rt}%</td><td>${sim.reached?sim.fireYear+" yr":"Not reached"}</td><td>${sim.reached?"Yr "+sim.fireYear+" · "+calY(sim.fireYear):">"+sim.horizon}</td></tr>`;});
   renderPayoff(r);
   renderRecommendations(runs, strat, a, b);
   renderCharts(runs);
