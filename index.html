@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+(function(){try{if(sessionStorage.getItem("fi-pin-ok")==="1")return;}catch(e){}document.documentElement.setAttribute("data-pin-locked","");})();
+</script>
+<style>
+html[data-pin-locked] body>:not(.pin-gate){display:none!important}
+.pin-gate{display:none}
+html[data-pin-locked] .pin-gate{display:flex;position:fixed;inset:0;z-index:99999;align-items:center;justify-content:center;background:#0b0e14}
+.pin-card{background:#141926;border:1px solid #232a3d;border-radius:14px;padding:36px 32px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e6e9f0;width:300px}
+.pin-card h2{margin:0 0 6px;font-size:1.2rem}
+.pin-card p{margin:0 0 18px;color:#8b93a7;font-size:0.9rem}
+.pin-card input{width:100%;box-sizing:border-box;padding:10px 12px;font-size:1.1rem;text-align:center;letter-spacing:0.3em;background:#0b0e14;border:1px solid #232a3d;border-radius:8px;color:#e6e9f0;outline:none}
+.pin-card input:focus{border-color:#5eead4}
+.pin-card button{width:100%;margin-top:12px;padding:10px;font-size:0.95rem;font-weight:600;background:#5eead4;color:#06281f;border:none;border-radius:8px;cursor:pointer}
+.pin-card .pin-err{color:#f87171;font-size:0.85rem;margin:10px 0 0}
+</style>
+
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FI-System — Real-Estate FIRE Planner</title>
@@ -140,6 +156,38 @@
 <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("fire-theme")||"light");}catch(e){}</script>
 </head>
 <body>
+<div class="pin-gate"><div class="pin-card">
+<h2>&#128274; Private dashboard</h2>
+<p>Enter the PIN to view.</p>
+<input id="pin-gate-in" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN">
+<button id="pin-gate-btn" type="button">Unlock</button>
+<p class="pin-err" id="pin-gate-err" hidden>Wrong PIN — try again.</p>
+</div></div>
+<script>
+(function(){
+  var gate=document.querySelector(".pin-gate");
+  if(!document.documentElement.hasAttribute("data-pin-locked")){if(gate)gate.remove();return;}
+  var HASH="158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab";
+  function unlock(){
+    var v=document.getElementById("pin-gate-in").value.trim();
+    crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)).then(function(buf){
+      var hex=Array.prototype.map.call(new Uint8Array(buf),function(b){return b.toString(16).padStart(2,"0");}).join("");
+      if(hex===HASH){
+        try{sessionStorage.setItem("fi-pin-ok","1");}catch(e){}
+        document.documentElement.removeAttribute("data-pin-locked");
+        gate.remove();
+      }else{
+        document.getElementById("pin-gate-err").hidden=false;
+        document.getElementById("pin-gate-in").value="";
+      }
+    });
+  }
+  document.getElementById("pin-gate-btn").addEventListener("click",unlock);
+  document.getElementById("pin-gate-in").addEventListener("keydown",function(e){if(e.key==="Enter")unlock();});
+  setTimeout(function(){document.getElementById("pin-gate-in").focus();},50);
+})();
+</script>
+
 <div class="wrap">
   <header class="top">
     <div class="title">
